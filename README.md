@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Zonnova
 
-## Getting Started
+Zonnova is a notebook-first idea workspace with an autonomous agent pipeline.
 
-First, run the development server:
+## Run Locally
+
+Install dependencies and start the app:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Amazon Nova Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Required environment:
 
-## Learn More
+```bash
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_SESSION_TOKEN=... # if using temporary credentials
+export AWS_REGION=us-east-1
+```
 
-To learn more about Next.js, take a look at the following resources:
+Optional model overrides:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+export ZONNOVA_NOVA_PRO_MODEL_ID=us.amazon.nova-pro-v1:0
+export ZONNOVA_NOVA_LITE_MODEL_ID=us.amazon.nova-lite-v1:0
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Your AWS principal must have `bedrock:Converse` access to these model IDs.
 
-## Deploy on Vercel
+## Test the Pipeline
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Create a run:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+curl -s -X POST http://localhost:3000/api/agent-runs \
+  -H "Content-Type: application/json" \
+  -d '{"workspaceId":"studio-lab","ideaText":"Build an anonymous notebook that turns notes into specs, plans, and demos."}'
+```
+
+Poll a run:
+
+```bash
+curl -s http://localhost:3000/api/agent-runs/<runId>
+```
+
+List runs:
+
+```bash
+curl -s "http://localhost:3000/api/agent-runs?workspaceId=studio-lab"
+```
+
+The run stages execute in order:
+
+1. `normalize_idea`
+2. `generate_spec`
+3. `generate_plan`
+4. `build_app`
+5. `run_qa`
+6. `record_demo`

@@ -1,8 +1,14 @@
+/**
+ * Orchestrates sequential execution of agent stages for each run.
+ */
 import { AGENT_PIPELINE } from "@/lib/agents/worker-agents";
 import { getAgentRun, insertAgentRun, listAgentRuns, updateAgentRun } from "@/lib/agents/store";
 import type { AgentRun, AgentStage } from "@/lib/agents/types";
 import { makeAgentRunId, nowIso, timestampedLog } from "@/lib/agents/utils";
 
+/**
+ * Builds the initial pending stage list from the static pipeline definition.
+ */
 function buildInitialStages(): AgentStage[] {
   return AGENT_PIPELINE.map((agent) => ({
     id: agent.id,
@@ -11,12 +17,18 @@ function buildInitialStages(): AgentStage[] {
   }));
 }
 
+/**
+ * Appends a timestamped log entry to a run.
+ */
 function appendRunLog(runId: string, source: string, message: string) {
   updateAgentRun(runId, (run) => {
     run.logs.push(timestampedLog(source, message));
   });
 }
 
+/**
+ * Executes the full agent pipeline sequentially for a given run.
+ */
 async function executeRun(runId: string): Promise<void> {
   const startingRun = updateAgentRun(runId, (run) => {
     run.status = "running";
@@ -28,6 +40,9 @@ async function executeRun(runId: string): Promise<void> {
     return;
   }
 
+  /**
+   * Sequential execution keeps state transitions deterministic and easier to inspect.
+   */
   for (const agent of AGENT_PIPELINE) {
     updateAgentRun(runId, (run) => {
       const stage = run.stages.find((item) => item.id === agent.id);
@@ -105,6 +120,9 @@ async function executeRun(runId: string): Promise<void> {
   });
 }
 
+/**
+ * Creates and enqueues a new agent run.
+ */
 export function enqueueAgentRun(workspaceId: string, ideaText: string): AgentRun {
   const run: AgentRun = {
     id: makeAgentRunId(),
@@ -120,6 +138,9 @@ export function enqueueAgentRun(workspaceId: string, ideaText: string): AgentRun
 
   const persistedRun = insertAgentRun(run);
 
+  /**
+   * Fire-and-forget orchestration so API handlers can return immediately.
+   */
   queueMicrotask(() => {
     void executeRun(run.id);
   });
@@ -127,10 +148,16 @@ export function enqueueAgentRun(workspaceId: string, ideaText: string): AgentRun
   return persistedRun;
 }
 
+/**
+ * Returns a run by ID.
+ */
 export function getAgentRunById(runId: string): AgentRun | undefined {
   return getAgentRun(runId);
 }
 
+/**
+ * Lists all runs or only runs for a specific workspace.
+ */
 export function listWorkspaceAgentRuns(workspaceId?: string): AgentRun[] {
   return listAgentRuns(workspaceId);
 }

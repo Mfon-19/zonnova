@@ -1,3 +1,13 @@
+/**
+ * Live workspace domain models derived from agent-run state.
+ */
+import { getAgentRunById, listWorkspaceAgentRuns } from "@/lib/agents/orchestrator";
+import type {
+  AgentRun,
+  AgentRunStatus,
+  AgentStageStatus,
+} from "@/lib/agents/types";
+
 export type IdeaStatus =
   | "queued"
   | "planning"
@@ -12,6 +22,9 @@ export type RunStepStatus = "pending" | "running" | "completed" | "failed";
 
 export type ArtifactType = "preview" | "repo" | "video" | "qa";
 
+/**
+ * Represents a product idea tracked in the workspace.
+ */
 export interface Idea {
   id: string;
   title: string;
@@ -24,6 +37,9 @@ export interface Idea {
   lastRunId?: string;
 }
 
+/**
+ * A single step in an autonomous run pipeline.
+ */
 export interface RunStep {
   id: string;
   label: string;
@@ -32,6 +48,9 @@ export interface RunStep {
   durationSec?: number;
 }
 
+/**
+ * Run metadata, usage stats, and execution timeline.
+ */
 export interface Run {
   id: string;
   ideaId: string;
@@ -46,6 +65,9 @@ export interface Run {
   logs: string[];
 }
 
+/**
+ * File or link output generated during/after a run.
+ */
 export interface Artifact {
   id: string;
   runId: string;
@@ -55,349 +77,9 @@ export interface Artifact {
   size: string;
 }
 
-const ideas: Idea[] = [
-  {
-    id: "idea-contextmesh-notebook",
-    title: "ContextMesh Notebook",
-    summary:
-      "Capture rough ideas, auto-generate spec + build + browser demo without human checkpoints.",
-    status: "building",
-    updatedAt: "2m ago",
-    tags: ["agentic", "ui", "workflow"],
-    assumptions: [
-      "Anonymous workspace defaults to one active run at a time.",
-      "MVP templates are limited to Next.js web apps.",
-      "Browser demo is 30-60 seconds and follows a happy path.",
-    ],
-    mvpScope: [
-      "Idea inbox + status board",
-      "Autonomous spec -> plan -> build chain",
-      "Artifacts hub (preview, repo zip, demo video)",
-    ],
-    lastRunId: "run-2041",
-  },
-  {
-    id: "idea-voice-standup-coach",
-    title: "Voice Standup Coach",
-    summary:
-      "Team members record a 60-second standup and get a crisp async update with blockers and next actions.",
-    status: "ready",
-    updatedAt: "45m ago",
-    tags: ["voice", "productivity"],
-    assumptions: [
-      "Users can opt out of transcript storage.",
-      "The generated summary follows company standup format.",
-      "Demo mode uses synthetic sample recordings.",
-    ],
-    mvpScope: [
-      "Upload recording",
-      "Generate summary with risks + asks",
-      "Publish clean team digest",
-    ],
-    lastRunId: "run-2038",
-  },
-  {
-    id: "idea-browser-quality-gym",
-    title: "Browser Quality Gym",
-    summary:
-      "Auto-generates small browser tasks and tests if your agent can solve them under time pressure.",
-    status: "planning",
-    updatedAt: "1h ago",
-    tags: ["evals", "browser"],
-    assumptions: [
-      "Scenarios should be deterministic for scoring.",
-      "Each challenge has one golden completion trace.",
-      "Runs should cap at three retries.",
-    ],
-    mvpScope: [
-      "Scenario generator",
-      "Agent run + score",
-      "Leaderboard by success rate",
-    ],
-    lastRunId: "run-2035",
-  },
-  {
-    id: "idea-move-admin-os",
-    title: "Move Admin OS",
-    summary:
-      "Single checklist assistant that automates moving paperwork: utilities, mail, subscriptions, and DMV tasks.",
-    status: "queued",
-    updatedAt: "3h ago",
-    tags: ["consumer", "forms"],
-    assumptions: [
-      "Public APIs do not exist for every provider.",
-      "Users need a manual fallback for each automation.",
-      "Task templates are region-specific.",
-    ],
-    mvpScope: [
-      "Smart checklist",
-      "Document reminder timeline",
-      "Progress dashboard",
-    ],
-    lastRunId: "run-2033",
-  },
-  {
-    id: "idea-fitness-rpg-audio",
-    title: "Fitness RPG Audio",
-    summary:
-      "Voice-driven workouts framed as quests with adaptive difficulty and progression loops.",
-    status: "failed",
-    updatedAt: "6h ago",
-    tags: ["voice", "gaming"],
-    assumptions: [
-      "Session pacing should adjust by real-time user feedback.",
-      "Quest design has to avoid repetitive voice prompts.",
-      "Audio generation latency must stay below two seconds.",
-    ],
-    mvpScope: [
-      "Quest generation",
-      "Voice coaching",
-      "Streak and progression screen",
-    ],
-    lastRunId: "run-2032",
-  },
-  {
-    id: "idea-meeting-pulse",
-    title: "Meeting Pulse",
-    summary:
-      "Real-time meeting quality feedback with action prompts and participation balancing.",
-    status: "discarded",
-    updatedAt: "1d ago",
-    tags: ["work", "analytics"],
-    assumptions: [
-      "Participants consent to sentiment analysis.",
-      "Realtime prompts should be subtle and non-disruptive.",
-      "Summaries should keep only actionable feedback.",
-    ],
-    mvpScope: [
-      "Live sentiment timeline",
-      "Participation balancing tips",
-      "Post-meeting scorecard",
-    ],
-    lastRunId: "run-2027",
-  },
-];
-
-const runs: Run[] = [
-  {
-    id: "run-2041",
-    ideaId: "idea-contextmesh-notebook",
-    status: "running",
-    startedAt: "2026-03-04T16:05:00Z",
-    modelMix: "Nova Pro + Nova Lite",
-    budgetUsd: 1.74,
-    tokensIn: 19840,
-    tokensOut: 6510,
-    steps: [
-      {
-        id: "step-1",
-        label: "Normalize idea",
-        status: "completed",
-        detail: "Extracted constraints, success metric, and edge-case assumptions.",
-        durationSec: 11,
-      },
-      {
-        id: "step-2",
-        label: "Generate requirements",
-        status: "completed",
-        detail: "Structured PRD with MVP boundaries and failure criteria.",
-        durationSec: 32,
-      },
-      {
-        id: "step-3",
-        label: "Generate implementation plan",
-        status: "completed",
-        detail: "Created task graph for UI, worker integration, and telemetry.",
-        durationSec: 24,
-      },
-      {
-        id: "step-4",
-        label: "Build app in sandbox",
-        status: "running",
-        detail: "Applying component refinements and wiring run state views.",
-      },
-      {
-        id: "step-5",
-        label: "Run tests",
-        status: "pending",
-        detail: "Waiting for build output before smoke checks.",
-      },
-      {
-        id: "step-6",
-        label: "Record demo",
-        status: "pending",
-        detail: "Will capture browser flow once preview is stable.",
-      },
-    ],
-    logs: [
-      "16:05:11Z spec-agent: normalized idea note and tagged as 'agentic-webapp'.",
-      "16:06:02Z plan-agent: generated 19 tasks across 4 phases.",
-      "16:07:19Z build-agent: bootstrapped Next.js app and component scaffolding.",
-      "16:10:41Z build-agent: wiring workspace shell and page routes.",
-      "16:12:08Z build-agent: rendering artifacts dashboard widgets.",
-    ],
-  },
-  {
-    id: "run-2038",
-    ideaId: "idea-voice-standup-coach",
-    status: "completed",
-    startedAt: "2026-03-04T14:12:00Z",
-    endedAt: "2026-03-04T14:28:00Z",
-    modelMix: "Nova Lite",
-    budgetUsd: 0.88,
-    tokensIn: 11820,
-    tokensOut: 4030,
-    steps: [
-      {
-        id: "step-1",
-        label: "Normalize idea",
-        status: "completed",
-        detail: "Captured key workflow and target user story.",
-        durationSec: 9,
-      },
-      {
-        id: "step-2",
-        label: "Generate requirements",
-        status: "completed",
-        detail: "Prepared concise v1 requirements and acceptance tests.",
-        durationSec: 20,
-      },
-      {
-        id: "step-3",
-        label: "Build app in sandbox",
-        status: "completed",
-        detail: "Generated transcript upload + summary dashboard.",
-        durationSec: 412,
-      },
-      {
-        id: "step-4",
-        label: "Run tests",
-        status: "completed",
-        detail: "Smoke and type checks passed.",
-        durationSec: 38,
-      },
-      {
-        id: "step-5",
-        label: "Record demo",
-        status: "completed",
-        detail: "Produced 41s browser demo clip.",
-        durationSec: 64,
-      },
-    ],
-    logs: [
-      "14:12:10Z spec-agent: drafted scope with one-click standup flow.",
-      "14:15:22Z build-agent: generated recorder upload components.",
-      "14:20:46Z qa-agent: lint and smoke checks complete.",
-      "14:27:07Z demo-agent: video uploaded to artifacts storage.",
-    ],
-  },
-  {
-    id: "run-2035",
-    ideaId: "idea-browser-quality-gym",
-    status: "queued",
-    startedAt: "2026-03-04T13:55:00Z",
-    modelMix: "Nova Pro",
-    budgetUsd: 0.0,
-    tokensIn: 0,
-    tokensOut: 0,
-    steps: [
-      {
-        id: "step-1",
-        label: "Normalize idea",
-        status: "pending",
-        detail: "Pending execution slot.",
-      },
-      {
-        id: "step-2",
-        label: "Generate requirements",
-        status: "pending",
-        detail: "Waiting for normalize stage.",
-      },
-    ],
-    logs: ["13:55:02Z scheduler: queued behind active run for this workspace."],
-  },
-  {
-    id: "run-2032",
-    ideaId: "idea-fitness-rpg-audio",
-    status: "failed",
-    startedAt: "2026-03-04T09:41:00Z",
-    endedAt: "2026-03-04T10:03:00Z",
-    modelMix: "Nova Pro + Nova Lite",
-    budgetUsd: 1.12,
-    tokensIn: 15300,
-    tokensOut: 5890,
-    steps: [
-      {
-        id: "step-1",
-        label: "Normalize idea",
-        status: "completed",
-        detail: "Idea structure extracted successfully.",
-        durationSec: 12,
-      },
-      {
-        id: "step-2",
-        label: "Generate requirements",
-        status: "completed",
-        detail: "Requirements generated with voice constraints.",
-        durationSec: 33,
-      },
-      {
-        id: "step-3",
-        label: "Build app in sandbox",
-        status: "failed",
-        detail: "Audio provider integration failed after retry budget.",
-        durationSec: 680,
-      },
-      {
-        id: "step-4",
-        label: "Run tests",
-        status: "pending",
-        detail: "Skipped because build failed.",
-      },
-    ],
-    logs: [
-      "09:41:09Z spec-agent: set latency requirement <2s for voice feedback.",
-      "09:52:19Z build-agent: retry #1 for audio stream endpoint.",
-      "10:03:02Z build-agent: retries exhausted, run marked failed.",
-    ],
-  },
-];
-
-const artifacts: Artifact[] = [
-  {
-    id: "artifact-1",
-    runId: "run-2038",
-    type: "preview",
-    label: "Live preview",
-    uri: "https://preview.zonnova.app/run-2038",
-    size: "link",
-  },
-  {
-    id: "artifact-2",
-    runId: "run-2038",
-    type: "repo",
-    label: "Repository snapshot",
-    uri: "s3://zonnova-artifacts/run-2038/repo.zip",
-    size: "12.4 MB",
-  },
-  {
-    id: "artifact-3",
-    runId: "run-2038",
-    type: "video",
-    label: "Demo recording",
-    uri: "s3://zonnova-artifacts/run-2038/demo.webm",
-    size: "19.1 MB",
-  },
-  {
-    id: "artifact-4",
-    runId: "run-2038",
-    type: "qa",
-    label: "QA report",
-    uri: "s3://zonnova-artifacts/run-2038/qa-report.json",
-    size: "84 KB",
-  },
-];
-
+/**
+ * Hashes free-form text into a stable unsigned integer.
+ */
 function hashSeed(value: string): number {
   let hash = 0;
 
@@ -408,151 +90,280 @@ function hashSeed(value: string): number {
   return hash;
 }
 
-function isSyntheticRunId(runId: string): boolean {
-  return runId.startsWith("run-note-");
+/**
+ * Generates a stable idea ID from raw idea text.
+ */
+function ideaIdFromText(text: string): string {
+  return `idea-${hashSeed(text).toString(16)}`;
 }
 
-function syntheticIdeaIdFromRunId(runId: string): string {
-  return `idea-generated-${runId}`;
+/**
+ * Converts agent-run status to UI idea status.
+ */
+function mapRunStatusToIdeaStatus(status: AgentRunStatus): IdeaStatus {
+  if (status === "queued") {
+    return "queued";
+  }
+
+  if (status === "running") {
+    return "building";
+  }
+
+  if (status === "completed") {
+    return "ready";
+  }
+
+  return "failed";
 }
 
-function syntheticRunFromId(runId: string): Run {
-  const hash = hashSeed(runId);
-  const startedMs = Date.now() - ((16 + (hash % 24)) * 60 + (hash % 40)) * 1000;
-  const durationMs = (6 + (hash % 9)) * 60 * 1000;
-  const endedMs = startedMs + durationMs;
-
-  return {
-    id: runId,
-    ideaId: syntheticIdeaIdFromRunId(runId),
-    status: "completed",
-    startedAt: new Date(startedMs).toISOString(),
-    endedAt: new Date(endedMs).toISOString(),
-    modelMix: hash % 2 === 0 ? "Nova Pro + Nova Lite" : "Nova Lite",
-    budgetUsd: Number((0.64 + (hash % 120) / 100).toFixed(2)),
-    tokensIn: 9000 + (hash % 7000),
-    tokensOut: 2600 + (hash % 3800),
-    steps: [
-      {
-        id: `${runId}-step-1`,
-        label: "Normalize idea",
-        status: "completed",
-        detail: "Captured user intent, constraints, and expected success criteria.",
-        durationSec: 12 + (hash % 10),
-      },
-      {
-        id: `${runId}-step-2`,
-        label: "Generate requirements",
-        status: "completed",
-        detail: "Drafted MVP scope with measurable utility and clear demo narrative.",
-        durationSec: 22 + (hash % 14),
-      },
-      {
-        id: `${runId}-step-3`,
-        label: "Generate implementation plan",
-        status: "completed",
-        detail: "Sequenced frontend, orchestration, and QA milestones.",
-        durationSec: 19 + (hash % 13),
-      },
-      {
-        id: `${runId}-step-4`,
-        label: "Build app in sandbox",
-        status: "completed",
-        detail: "Produced runnable prototype from generated plan.",
-        durationSec: 280 + (hash % 300),
-      },
-      {
-        id: `${runId}-step-5`,
-        label: "Run tests",
-        status: "completed",
-        detail: "Completed smoke and type checks.",
-        durationSec: 36 + (hash % 20),
-      },
-      {
-        id: `${runId}-step-6`,
-        label: "Record demo",
-        status: "completed",
-        detail: "Captured browser walkthrough of the happy-path flow.",
-        durationSec: 42 + (hash % 20),
-      },
-    ],
-    logs: [
-      "scheduler: idle timeout elapsed for notebook note; run started.",
-      "spec-agent: requirements generated with autonomous flow constraints.",
-      "build-agent: scaffolded app, implemented key interaction loops.",
-      "qa-agent: smoke checks passed and artifacts were published.",
-      "demo-agent: browser walkthrough captured and attached to run artifacts.",
-    ],
-  };
+/**
+ * Converts agent stage status to run-step status.
+ */
+function mapStageStatusToRunStepStatus(status: AgentStageStatus): RunStepStatus {
+  return status;
 }
 
-function syntheticIdeaFromId(ideaId: string): Idea | undefined {
-  if (!ideaId.startsWith("idea-generated-run-note-")) {
+/**
+ * Formats ISO timestamps into compact relative labels.
+ */
+function relativeTime(isoTime: string): string {
+  const value = Date.parse(isoTime);
+  if (Number.isNaN(value)) {
+    return "just now";
+  }
+
+  const deltaMs = Math.max(Date.now() - value, 0);
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (deltaMs < minute) {
+    return "just now";
+  }
+
+  if (deltaMs < hour) {
+    return `${Math.floor(deltaMs / minute)}m ago`;
+  }
+
+  if (deltaMs < day) {
+    return `${Math.floor(deltaMs / hour)}h ago`;
+  }
+
+  return `${Math.floor(deltaMs / day)}d ago`;
+}
+
+/**
+ * Converts free-form text to a single readable line.
+ */
+function compactLine(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+/**
+ * Derives a short title from idea text.
+ */
+function titleFromIdeaText(ideaText: string): string {
+  const firstLine = compactLine(ideaText.split("\n")[0] ?? "");
+  if (!firstLine) {
+    return "Untitled idea";
+  }
+
+  if (firstLine.length <= 80) {
+    return firstLine;
+  }
+
+  return `${firstLine.slice(0, 77)}...`;
+}
+
+/**
+ * Parses bullet points from a named markdown section.
+ */
+function parseSectionBullets(markdown: string | undefined, sectionTitle: string): string[] {
+  if (!markdown) {
+    return [];
+  }
+
+  const lines = markdown.split("\n");
+  const normalizedTarget = sectionTitle.trim().toLowerCase();
+  let inSection = false;
+  const bullets: string[] = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    const heading = line.match(/^##\s+(.+)$/);
+
+    if (heading) {
+      const normalizedHeading = heading[1].trim().toLowerCase();
+      inSection = normalizedHeading === normalizedTarget;
+      continue;
+    }
+
+    if (!inSection) {
+      continue;
+    }
+
+    if (line.startsWith("#")) {
+      break;
+    }
+
+    if (line.startsWith("- ")) {
+      bullets.push(line.slice(2).trim());
+    }
+  }
+
+  return bullets.filter((item) => item.length > 0);
+}
+
+/**
+ * Computes stage duration in seconds when start/end timestamps are available.
+ */
+function durationSeconds(startedAt?: string, endedAt?: string): number | undefined {
+  if (!startedAt || !endedAt) {
     return undefined;
   }
 
-  const runId = ideaId.replace("idea-generated-", "");
-  const suffix = runId.replace("run-note-", "").slice(0, 6).toUpperCase();
+  const startMs = Date.parse(startedAt);
+  const endMs = Date.parse(endedAt);
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) {
+    return undefined;
+  }
 
+  return Math.floor((endMs - startMs) / 1000);
+}
+
+/**
+ * Converts an AgentRun to workspace Run shape.
+ */
+function toRun(run: AgentRun): Run {
   return {
-    id: ideaId,
-    title: `Notebook Idea ${suffix}`,
-    summary:
-      "Generated from an anonymous notebook sticky note and completed through the autonomous build pipeline.",
-    status: "ready",
-    updatedAt: "just now",
-    tags: ["notebook", "agentic", "autonomous"],
-    assumptions: [
-      "User intent was inferred from one short note.",
-      "The first run optimizes for demo clarity over full feature coverage.",
-      "A rebuild can tighten edge cases and improve production readiness.",
-    ],
-    mvpScope: [
-      "Interpret note into a scoped product spec",
-      "Generate and implement a runnable web prototype",
-      "Publish artifacts and demo for review",
-    ],
-    lastRunId: runId,
+    id: run.id,
+    ideaId: ideaIdFromText(run.ideaText),
+    status: run.status,
+    startedAt: run.startedAt ?? run.createdAt,
+    endedAt: run.endedAt,
+    modelMix: "Nova Pro + Nova Lite",
+    budgetUsd: 0,
+    tokensIn: 0,
+    tokensOut: 0,
+    steps: run.stages.map((stage) => ({
+      id: stage.id,
+      label: stage.label,
+      status: mapStageStatusToRunStepStatus(stage.status),
+      detail: stage.detail ?? stage.error ?? "Pending execution.",
+      durationSec: durationSeconds(stage.startedAt, stage.endedAt),
+    })),
+    logs: run.logs,
   };
 }
 
-function syntheticArtifactsForRun(runId: string): Artifact[] {
-  return [
-    {
-      id: `${runId}-artifact-preview`,
-      runId,
+/**
+ * Converts an AgentRun to workspace Artifact list.
+ */
+function toArtifacts(run: AgentRun): Artifact[] {
+  const artifacts: Artifact[] = [];
+
+  if (run.artifacts.previewUrl) {
+    artifacts.push({
+      id: `${run.id}-preview`,
+      runId: run.id,
       type: "preview",
       label: "Live preview",
-      uri: `https://preview.zonnova.app/${runId}`,
+      uri: run.artifacts.previewUrl,
       size: "link",
-    },
-    {
-      id: `${runId}-artifact-repo`,
-      runId,
+    });
+  }
+
+  if (run.artifacts.repoUri) {
+    artifacts.push({
+      id: `${run.id}-repo`,
+      runId: run.id,
       type: "repo",
       label: "Repository snapshot",
-      uri: `s3://zonnova-artifacts/${runId}/repo.zip`,
-      size: "11.9 MB",
-    },
-    {
-      id: `${runId}-artifact-video`,
-      runId,
+      uri: run.artifacts.repoUri,
+      size: "link",
+    });
+  }
+
+  if (run.artifacts.demoVideoUri) {
+    artifacts.push({
+      id: `${run.id}-video`,
+      runId: run.id,
       type: "video",
       label: "Demo recording",
-      uri: `s3://zonnova-artifacts/${runId}/demo.webm`,
-      size: "17.4 MB",
-    },
-    {
-      id: `${runId}-artifact-qa`,
-      runId,
+      uri: run.artifacts.demoVideoUri,
+      size: "link",
+    });
+  }
+
+  if (run.artifacts.qaReportUri) {
+    artifacts.push({
+      id: `${run.id}-qa`,
+      runId: run.id,
       type: "qa",
       label: "QA report",
-      uri: `s3://zonnova-artifacts/${runId}/qa-report.json`,
-      size: "91 KB",
-    },
-  ];
+      uri: run.artifacts.qaReportUri,
+      size: "link",
+    });
+  }
+
+  return artifacts;
 }
 
+/**
+ * Builds current ideas from all available agent runs.
+ */
+function buildIdeasFromRuns(runs: AgentRun[]): Idea[] {
+  const grouped = new Map<string, AgentRun[]>();
+
+  for (const run of runs) {
+    const ideaId = ideaIdFromText(run.ideaText);
+    const collection = grouped.get(ideaId) ?? [];
+    collection.push(run);
+    grouped.set(ideaId, collection);
+  }
+
+  return Array.from(grouped.entries()).map(([ideaId, ideaRuns]) => {
+    const ordered = [...ideaRuns].sort((left, right) =>
+      right.createdAt.localeCompare(left.createdAt),
+    );
+    const latestRun = ordered[0];
+
+    const scope = parseSectionBullets(
+      latestRun.outputs.specMarkdown,
+      "Must-Have Requirements",
+    );
+    const assumptions = parseSectionBullets(latestRun.outputs.specMarkdown, "Non-Goals");
+    const summarySource =
+      latestRun.outputs.normalizedIdea ?? compactLine(latestRun.ideaText);
+
+    return {
+      id: ideaId,
+      title: titleFromIdeaText(latestRun.ideaText),
+      summary: summarySource,
+      status: mapRunStatusToIdeaStatus(latestRun.status),
+      updatedAt: relativeTime(latestRun.createdAt),
+      tags: ["agent-run", latestRun.status],
+      assumptions:
+        assumptions.length > 0
+          ? assumptions
+          : ["No explicit assumptions captured yet."],
+      mvpScope:
+        scope.length > 0 ? scope : ["No explicit MVP scope generated yet."],
+      lastRunId: latestRun.id,
+    };
+  });
+}
+
+/**
+ * Loads all runs currently tracked by the in-memory orchestrator.
+ */
+function listAllAgentRuns(): AgentRun[] {
+  return listWorkspaceAgentRuns();
+}
+
+/**
+ * Converts a workspace slug into a readable workspace label.
+ */
 export function getWorkspaceLabel(workspaceId: string): string {
   return workspaceId
     .split("-")
@@ -561,45 +372,56 @@ export function getWorkspaceLabel(workspaceId: string): string {
     .join(" ");
 }
 
+/**
+ * Lists non-discarded ideas in the workspace.
+ */
 export function listActiveIdeas(): Idea[] {
-  return ideas.filter((idea) => idea.status !== "discarded");
+  return buildIdeasFromRuns(listAllAgentRuns());
 }
 
+/**
+ * Lists discarded ideas.
+ */
 export function listDiscardedIdeas(): Idea[] {
-  return ideas.filter((idea) => idea.status === "discarded");
+  return [];
 }
 
+/**
+ * Returns an idea by ID.
+ */
 export function getIdeaById(ideaId: string): Idea | undefined {
-  return ideas.find((idea) => idea.id === ideaId) ?? syntheticIdeaFromId(ideaId);
+  return listActiveIdeas().find((idea) => idea.id === ideaId);
 }
 
+/**
+ * Lists runs for an idea.
+ */
 export function listRunsForIdea(ideaId: string): Run[] {
-  const matchedRuns = runs.filter((run) => run.ideaId === ideaId);
-  if (matchedRuns.length > 0) {
-    return matchedRuns;
-  }
-
-  const syntheticIdea = syntheticIdeaFromId(ideaId);
-  if (!syntheticIdea?.lastRunId) {
-    return [];
-  }
-
-  return [syntheticRunFromId(syntheticIdea.lastRunId)];
+  return listAllAgentRuns()
+    .filter((run) => ideaIdFromText(run.ideaText) === ideaId)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .map((run) => toRun(run));
 }
 
+/**
+ * Returns a run by ID.
+ */
 export function getRunById(runId: string): Run | undefined {
-  return runs.find((run) => run.id === runId) ?? (isSyntheticRunId(runId) ? syntheticRunFromId(runId) : undefined);
+  const run = getAgentRunById(runId);
+  return run ? toRun(run) : undefined;
 }
 
+/**
+ * Lists artifacts for a run.
+ */
 export function listArtifactsForRun(runId: string): Artifact[] {
-  const matchedArtifacts = artifacts.filter((artifact) => artifact.runId === runId);
-  if (matchedArtifacts.length > 0) {
-    return matchedArtifacts;
-  }
-
-  return isSyntheticRunId(runId) ? syntheticArtifactsForRun(runId) : [];
+  const run = getAgentRunById(runId);
+  return run ? toArtifacts(run) : [];
 }
 
+/**
+ * Aggregates active idea counts by status.
+ */
 export function ideaStatusCounts() {
   return listActiveIdeas().reduce(
     (acc, item) => {

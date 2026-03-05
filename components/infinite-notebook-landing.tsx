@@ -6,8 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 const DEMO_WORKSPACE_ID = "studio-lab";
 const NOTE_WIDTH = 286;
 const AUTO_START_DELAY_MS = 4500;
-const QUEUE_STAGE_MS = 1400;
-const BUILD_STAGE_MS = 5200;
+const RUN_POLL_INTERVAL_MS = 1600;
 
 const NOTE_STYLES = [
   {
@@ -54,8 +53,7 @@ type DragState = {
 
 type BuildTimers = {
   kickoff?: number;
-  queued?: number;
-  completed?: number;
+  poll?: number;
 };
 
 const INITIAL_NOTES: NotebookNote[] = [
@@ -79,7 +77,7 @@ const INITIAL_NOTES: NotebookNote[] = [
     id: "starter-3",
     x: 920,
     y: 140,
-    text: "Voice-first intern prep coach with role-specific mock interview loops.",
+    text: "Voice-first intern prep coach with role-specific interview loops.",
     styleIndex: 2,
     buildStatus: "idle",
   },
@@ -93,16 +91,33 @@ function makeNoteId() {
   return `note-${Date.now()}`;
 }
 
-function makeRunId() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `run-note-${crypto.randomUUID().slice(0, 8)}`;
-  }
-
-  return `run-note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-}
-
 function hasNoteContent(value: string) {
   return value.trim().length > 0;
+}
+
+type AgentRunStatus = "queued" | "running" | "completed" | "failed";
+
+type AgentRunResponse = {
+  run?: {
+    id?: string;
+    status?: AgentRunStatus;
+  };
+};
+
+function mapAgentRunStatusToNoteStatus(status: AgentRunStatus): NoteBuildStatus {
+  if (status === "queued") {
+    return "queued";
+  }
+
+  if (status === "running") {
+    return "building";
+  }
+
+  if (status === "completed") {
+    return "ready";
+  }
+
+  return "failed";
 }
 
 export function InfiniteNotebookLanding() {
@@ -136,11 +151,8 @@ export function InfiniteNotebookLanding() {
     if (timers.kickoff) {
       window.clearTimeout(timers.kickoff);
     }
-    if (timers.queued) {
-      window.clearTimeout(timers.queued);
-    }
-    if (timers.completed) {
-      window.clearTimeout(timers.completed);
+    if (timers.poll) {
+      window.clearInterval(timers.poll);
     }
 
     delete buildTimersRef.current[noteId];
@@ -152,14 +164,61 @@ export function InfiniteNotebookLanding() {
     });
   }, [clearBuildTimers]);
 
+  const startPollingRun = useCallback(
+    (noteId: string, runId: string) => {
+      const timers = buildTimersRef.current[noteId] ?? {};
+
+      timers.poll = window.setInterval(async () => {
+        try {
+          const response = await fetch(`/api/agent-runs/${runId}`, {
+            method: "GET",
+            cache: "no-store",
+          });
+
+          if (!response.ok) {
+            return;
+          }
+
+          const payload = (await response.json()) as AgentRunResponse;
+          const status = payload.run?.status;
+
+          if (!status) {
+            return;
+          }
+
+          const nextStatus = mapAgentRunStatusToNoteStatus(status);
+
+          setNotes((current) =>
+            current.map((note) =>
+              note.id === noteId && note.latestRunId === runId
+                ? {
+                    ...note,
+                    buildStatus: nextStatus,
+                  }
+                : note,
+            ),
+          );
+
+          if (status === "completed" || status === "failed") {
+            clearBuildTimers(noteId);
+          }
+        } catch {
+          // Keep polling unless a terminal status arrives.
+        }
+      }, RUN_POLL_INTERVAL_MS);
+
+      buildTimersRef.current[noteId] = timers;
+    },
+    [clearBuildTimers],
+  );
+
   const startRunPipeline = useCallback(
     (noteId: string, delayMs: number) => {
       clearBuildTimers(noteId);
 
-      const runId = makeRunId();
       const timers: BuildTimers = {};
 
-      timers.kickoff = window.setTimeout(() => {
+      timers.kickoff = window.setTimeout(async () => {
         const targetNote = notesRef.current.find((note) => note.id === noteId);
         if (!targetNote || !hasNoteContent(targetNote.text)) {
           delete buildTimersRef.current[noteId];
@@ -172,45 +231,66 @@ export function InfiniteNotebookLanding() {
               ? {
                   ...note,
                   buildStatus: "queued",
-                  latestRunId: runId,
+                  latestRunId: undefined,
                 }
               : note,
           ),
         );
 
-        timers.queued = window.setTimeout(() => {
+        try {
+          const createResponse = await fetch("/api/agent-runs", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              workspaceId: DEMO_WORKSPACE_ID,
+              ideaText: targetNote.text,
+            }),
+          });
+
+          if (!createResponse.ok) {
+            throw new Error("Failed to enqueue run.");
+          }
+
+          const payload = (await createResponse.json()) as AgentRunResponse;
+          const runId = payload.run?.id;
+
+          if (!runId) {
+            throw new Error("Run ID missing from response.");
+          }
+
           setNotes((current) =>
             current.map((note) =>
               note.id === noteId
                 ? {
                     ...note,
-                    buildStatus: "building",
+                    buildStatus: "queued",
                     latestRunId: runId,
                   }
                 : note,
             ),
           );
-        }, QUEUE_STAGE_MS);
 
-        timers.completed = window.setTimeout(() => {
+          startPollingRun(noteId, runId);
+        } catch {
           setNotes((current) =>
             current.map((note) =>
               note.id === noteId
                 ? {
-                    ...note,
-                    buildStatus: "ready",
-                    latestRunId: runId,
-                  }
+                  ...note,
+                    buildStatus: "failed",
+                }
                 : note,
             ),
           );
           delete buildTimersRef.current[noteId];
-        }, QUEUE_STAGE_MS + BUILD_STAGE_MS);
+        }
       }, delayMs);
 
       buildTimersRef.current[noteId] = timers;
     },
-    [clearBuildTimers],
+    [clearBuildTimers, startPollingRun],
   );
 
   useEffect(
@@ -253,6 +333,7 @@ export function InfiniteNotebookLanding() {
                   ...note,
                   text,
                   buildStatus: "idle",
+                  latestRunId: undefined,
                 }
               : note,
         ),

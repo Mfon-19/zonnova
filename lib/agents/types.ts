@@ -1,7 +1,13 @@
+/**
+ * Core type contracts for the agent orchestration runtime.
+ */
 export type AgentRunStatus = "queued" | "running" | "completed" | "failed";
 
 export type AgentStageStatus = "pending" | "running" | "completed" | "failed";
 
+/**
+ * Stable stage identifiers used by the orchestrator state machine.
+ */
 export type AgentStageId =
   | "normalize_idea"
   | "generate_spec"
@@ -20,6 +26,9 @@ export interface AgentStage {
   endedAt?: string;
 }
 
+/**
+ * Structured outputs produced by stage agents and exposed via APIs.
+ */
 export interface AgentRunOutputs {
   normalizedIdea?: string;
   specMarkdown?: string;
@@ -36,6 +45,9 @@ export interface AgentRunArtifacts {
   qaReportUri?: string;
 }
 
+/**
+ * Canonical run document tracked by the runtime store.
+ */
 export interface AgentRun {
   id: string;
   workspaceId: string;
@@ -50,6 +62,9 @@ export interface AgentRun {
   artifacts: AgentRunArtifacts;
 }
 
+/**
+ * Snapshot passed into each stage execution.
+ */
 export interface AgentExecutionContext {
   run: AgentRun;
   outputs: AgentRunOutputs;
@@ -57,6 +72,9 @@ export interface AgentExecutionContext {
   log: (message: string) => void;
 }
 
+/**
+ * Partial updates produced by a stage and merged by the orchestrator.
+ */
 export interface AgentExecutionResult {
   detail: string;
   outputs?: Partial<AgentRunOutputs>;
