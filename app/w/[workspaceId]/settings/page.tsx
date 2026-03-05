@@ -1,4 +1,4 @@
-import { Settings, Save, Trash2, Key, AlertTriangle } from "lucide-react";
+import { Settings, Save, Trash2, Key } from "lucide-react";
 
 export default function SettingsPage() {
   return (

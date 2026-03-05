@@ -398,6 +398,161 @@ const artifacts: Artifact[] = [
   },
 ];
 
+function hashSeed(value: string): number {
+  let hash = 0;
+
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+
+  return hash;
+}
+
+function isSyntheticRunId(runId: string): boolean {
+  return runId.startsWith("run-note-");
+}
+
+function syntheticIdeaIdFromRunId(runId: string): string {
+  return `idea-generated-${runId}`;
+}
+
+function syntheticRunFromId(runId: string): Run {
+  const hash = hashSeed(runId);
+  const startedMs = Date.now() - ((16 + (hash % 24)) * 60 + (hash % 40)) * 1000;
+  const durationMs = (6 + (hash % 9)) * 60 * 1000;
+  const endedMs = startedMs + durationMs;
+
+  return {
+    id: runId,
+    ideaId: syntheticIdeaIdFromRunId(runId),
+    status: "completed",
+    startedAt: new Date(startedMs).toISOString(),
+    endedAt: new Date(endedMs).toISOString(),
+    modelMix: hash % 2 === 0 ? "Nova Pro + Nova Lite" : "Nova Lite",
+    budgetUsd: Number((0.64 + (hash % 120) / 100).toFixed(2)),
+    tokensIn: 9000 + (hash % 7000),
+    tokensOut: 2600 + (hash % 3800),
+    steps: [
+      {
+        id: `${runId}-step-1`,
+        label: "Normalize idea",
+        status: "completed",
+        detail: "Captured user intent, constraints, and expected success criteria.",
+        durationSec: 12 + (hash % 10),
+      },
+      {
+        id: `${runId}-step-2`,
+        label: "Generate requirements",
+        status: "completed",
+        detail: "Drafted MVP scope with measurable utility and clear demo narrative.",
+        durationSec: 22 + (hash % 14),
+      },
+      {
+        id: `${runId}-step-3`,
+        label: "Generate implementation plan",
+        status: "completed",
+        detail: "Sequenced frontend, orchestration, and QA milestones.",
+        durationSec: 19 + (hash % 13),
+      },
+      {
+        id: `${runId}-step-4`,
+        label: "Build app in sandbox",
+        status: "completed",
+        detail: "Produced runnable prototype from generated plan.",
+        durationSec: 280 + (hash % 300),
+      },
+      {
+        id: `${runId}-step-5`,
+        label: "Run tests",
+        status: "completed",
+        detail: "Completed smoke and type checks.",
+        durationSec: 36 + (hash % 20),
+      },
+      {
+        id: `${runId}-step-6`,
+        label: "Record demo",
+        status: "completed",
+        detail: "Captured browser walkthrough of the happy-path flow.",
+        durationSec: 42 + (hash % 20),
+      },
+    ],
+    logs: [
+      "scheduler: idle timeout elapsed for notebook note; run started.",
+      "spec-agent: requirements generated with autonomous flow constraints.",
+      "build-agent: scaffolded app, implemented key interaction loops.",
+      "qa-agent: smoke checks passed and artifacts were published.",
+      "demo-agent: browser walkthrough captured and attached to run artifacts.",
+    ],
+  };
+}
+
+function syntheticIdeaFromId(ideaId: string): Idea | undefined {
+  if (!ideaId.startsWith("idea-generated-run-note-")) {
+    return undefined;
+  }
+
+  const runId = ideaId.replace("idea-generated-", "");
+  const suffix = runId.replace("run-note-", "").slice(0, 6).toUpperCase();
+
+  return {
+    id: ideaId,
+    title: `Notebook Idea ${suffix}`,
+    summary:
+      "Generated from an anonymous notebook sticky note and completed through the autonomous build pipeline.",
+    status: "ready",
+    updatedAt: "just now",
+    tags: ["notebook", "agentic", "autonomous"],
+    assumptions: [
+      "User intent was inferred from one short note.",
+      "The first run optimizes for demo clarity over full feature coverage.",
+      "A rebuild can tighten edge cases and improve production readiness.",
+    ],
+    mvpScope: [
+      "Interpret note into a scoped product spec",
+      "Generate and implement a runnable web prototype",
+      "Publish artifacts and demo for review",
+    ],
+    lastRunId: runId,
+  };
+}
+
+function syntheticArtifactsForRun(runId: string): Artifact[] {
+  return [
+    {
+      id: `${runId}-artifact-preview`,
+      runId,
+      type: "preview",
+      label: "Live preview",
+      uri: `https://preview.zonnova.app/${runId}`,
+      size: "link",
+    },
+    {
+      id: `${runId}-artifact-repo`,
+      runId,
+      type: "repo",
+      label: "Repository snapshot",
+      uri: `s3://zonnova-artifacts/${runId}/repo.zip`,
+      size: "11.9 MB",
+    },
+    {
+      id: `${runId}-artifact-video`,
+      runId,
+      type: "video",
+      label: "Demo recording",
+      uri: `s3://zonnova-artifacts/${runId}/demo.webm`,
+      size: "17.4 MB",
+    },
+    {
+      id: `${runId}-artifact-qa`,
+      runId,
+      type: "qa",
+      label: "QA report",
+      uri: `s3://zonnova-artifacts/${runId}/qa-report.json`,
+      size: "91 KB",
+    },
+  ];
+}
+
 export function getWorkspaceLabel(workspaceId: string): string {
   return workspaceId
     .split("-")
@@ -415,19 +570,34 @@ export function listDiscardedIdeas(): Idea[] {
 }
 
 export function getIdeaById(ideaId: string): Idea | undefined {
-  return ideas.find((idea) => idea.id === ideaId);
+  return ideas.find((idea) => idea.id === ideaId) ?? syntheticIdeaFromId(ideaId);
 }
 
 export function listRunsForIdea(ideaId: string): Run[] {
-  return runs.filter((run) => run.ideaId === ideaId);
+  const matchedRuns = runs.filter((run) => run.ideaId === ideaId);
+  if (matchedRuns.length > 0) {
+    return matchedRuns;
+  }
+
+  const syntheticIdea = syntheticIdeaFromId(ideaId);
+  if (!syntheticIdea?.lastRunId) {
+    return [];
+  }
+
+  return [syntheticRunFromId(syntheticIdea.lastRunId)];
 }
 
 export function getRunById(runId: string): Run | undefined {
-  return runs.find((run) => run.id === runId);
+  return runs.find((run) => run.id === runId) ?? (isSyntheticRunId(runId) ? syntheticRunFromId(runId) : undefined);
 }
 
 export function listArtifactsForRun(runId: string): Artifact[] {
-  return artifacts.filter((artifact) => artifact.runId === runId);
+  const matchedArtifacts = artifacts.filter((artifact) => artifact.runId === runId);
+  if (matchedArtifacts.length > 0) {
+    return matchedArtifacts;
+  }
+
+  return isSyntheticRunId(runId) ? syntheticArtifactsForRun(runId) : [];
 }
 
 export function ideaStatusCounts() {

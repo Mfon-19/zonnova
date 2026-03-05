@@ -5,6 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const DEMO_WORKSPACE_ID = "studio-lab";
 const NOTE_WIDTH = 286;
+const AUTO_START_DELAY_MS = 4500;
+const QUEUE_STAGE_MS = 1400;
+const BUILD_STAGE_MS = 5200;
 
 const NOTE_STYLES = [
   {
@@ -27,7 +30,11 @@ type NotebookNote = {
   y: number;
   text: string;
   styleIndex: number;
+  buildStatus: NoteBuildStatus;
+  latestRunId?: string;
 };
+
+type NoteBuildStatus = "idle" | "queued" | "building" | "ready" | "failed";
 
 type PanState = {
   startX: number;
@@ -45,6 +52,12 @@ type DragState = {
   originY: number;
 };
 
+type BuildTimers = {
+  kickoff?: number;
+  queued?: number;
+  completed?: number;
+};
+
 const INITIAL_NOTES: NotebookNote[] = [
   {
     id: "starter-1",
@@ -52,6 +65,7 @@ const INITIAL_NOTES: NotebookNote[] = [
     y: 170,
     text: "Context store across codex, cursor, claude, and chat apps.",
     styleIndex: 0,
+    buildStatus: "idle",
   },
   {
     id: "starter-2",
@@ -59,6 +73,7 @@ const INITIAL_NOTES: NotebookNote[] = [
     y: 320,
     text: "Idea notebook that builds the app and records a demo automatically.",
     styleIndex: 1,
+    buildStatus: "idle",
   },
   {
     id: "starter-3",
@@ -66,6 +81,7 @@ const INITIAL_NOTES: NotebookNote[] = [
     y: 140,
     text: "Voice-first intern prep coach with role-specific mock interview loops.",
     styleIndex: 2,
+    buildStatus: "idle",
   },
 ];
 
@@ -77,20 +93,132 @@ function makeNoteId() {
   return `note-${Date.now()}`;
 }
 
+function makeRunId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `run-note-${crypto.randomUUID().slice(0, 8)}`;
+  }
+
+  return `run-note-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function hasNoteContent(value: string) {
+  return value.trim().length > 0;
+}
+
 export function InfiniteNotebookLanding() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const panRef = useRef<PanState | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const offsetRef = useRef({ x: 0, y: 0 });
+  const notesRef = useRef<NotebookNote[]>(INITIAL_NOTES);
+  const buildTimersRef = useRef<Record<string, BuildTimers>>({});
 
   const [notes, setNotes] = useState<NotebookNote[]>(INITIAL_NOTES);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [isPanning, setIsPanning] = useState(false);
+  const [isCompletedTrayOpen, setIsCompletedTrayOpen] = useState(false);
 
   useEffect(() => {
     offsetRef.current = offset;
   }, [offset]);
+
+  useEffect(() => {
+    notesRef.current = notes;
+  }, [notes]);
+
+  const clearBuildTimers = useCallback((noteId: string) => {
+    const timers = buildTimersRef.current[noteId];
+    if (!timers) {
+      return;
+    }
+
+    if (timers.kickoff) {
+      window.clearTimeout(timers.kickoff);
+    }
+    if (timers.queued) {
+      window.clearTimeout(timers.queued);
+    }
+    if (timers.completed) {
+      window.clearTimeout(timers.completed);
+    }
+
+    delete buildTimersRef.current[noteId];
+  }, []);
+
+  const clearAllBuildTimers = useCallback(() => {
+    Object.keys(buildTimersRef.current).forEach((noteId) => {
+      clearBuildTimers(noteId);
+    });
+  }, [clearBuildTimers]);
+
+  const startRunPipeline = useCallback(
+    (noteId: string, delayMs: number) => {
+      clearBuildTimers(noteId);
+
+      const runId = makeRunId();
+      const timers: BuildTimers = {};
+
+      timers.kickoff = window.setTimeout(() => {
+        const targetNote = notesRef.current.find((note) => note.id === noteId);
+        if (!targetNote || !hasNoteContent(targetNote.text)) {
+          delete buildTimersRef.current[noteId];
+          return;
+        }
+
+        setNotes((current) =>
+          current.map((note) =>
+            note.id === noteId
+              ? {
+                  ...note,
+                  buildStatus: "queued",
+                  latestRunId: runId,
+                }
+              : note,
+          ),
+        );
+
+        timers.queued = window.setTimeout(() => {
+          setNotes((current) =>
+            current.map((note) =>
+              note.id === noteId
+                ? {
+                    ...note,
+                    buildStatus: "building",
+                    latestRunId: runId,
+                  }
+                : note,
+            ),
+          );
+        }, QUEUE_STAGE_MS);
+
+        timers.completed = window.setTimeout(() => {
+          setNotes((current) =>
+            current.map((note) =>
+              note.id === noteId
+                ? {
+                    ...note,
+                    buildStatus: "ready",
+                    latestRunId: runId,
+                  }
+                : note,
+            ),
+          );
+          delete buildTimersRef.current[noteId];
+        }, QUEUE_STAGE_MS + BUILD_STAGE_MS);
+      }, delayMs);
+
+      buildTimersRef.current[noteId] = timers;
+    },
+    [clearBuildTimers],
+  );
+
+  useEffect(
+    () => () => {
+      clearAllBuildTimers();
+    },
+    [clearAllBuildTimers],
+  );
 
   const createNoteAtClientPoint = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -107,26 +235,40 @@ export function InfiniteNotebookLanding() {
       y: clientY - rect.top - currentOffset.y - 36,
       text: "",
       styleIndex: Math.floor(Math.random() * NOTE_STYLES.length),
+      buildStatus: "idle",
     };
 
     setNotes((current) => [...current, note]);
     setActiveNoteId(note.id);
   }, []);
 
-  const updateNoteText = useCallback((noteId: string, text: string) => {
-    setNotes((current) =>
-      current.map((note) =>
-        note.id === noteId
-          ? {
-              ...note,
-              text,
-            }
-          : note,
-      ),
-    );
-  }, []);
+  const updateNoteText = useCallback(
+    (noteId: string, text: string) => {
+      const contentPresent = hasNoteContent(text);
+
+      setNotes((current) =>
+        current.map((note) =>
+            note.id === noteId
+              ? {
+                  ...note,
+                  text,
+                  buildStatus: "idle",
+                }
+              : note,
+        ),
+      );
+
+      clearBuildTimers(noteId);
+
+      if (contentPresent) {
+        startRunPipeline(noteId, AUTO_START_DELAY_MS);
+      }
+    },
+    [clearBuildTimers, startRunPipeline],
+  );
 
   const deleteNote = useCallback((noteId: string) => {
+    clearBuildTimers(noteId);
     setNotes((current) => current.filter((note) => note.id !== noteId));
 
     setActiveNoteId((current) => {
@@ -136,7 +278,19 @@ export function InfiniteNotebookLanding() {
 
       return current;
     });
-  }, []);
+  }, [clearBuildTimers]);
+
+  const retryBuild = useCallback(
+    (noteId: string) => {
+      const targetNote = notesRef.current.find((note) => note.id === noteId);
+      if (!targetNote || !hasNoteContent(targetNote.text)) {
+        return;
+      }
+
+      startRunPipeline(noteId, 350);
+    },
+    [startRunPipeline],
+  );
 
   const startDraggingNote = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>, noteId: string) => {
@@ -259,7 +413,7 @@ export function InfiniteNotebookLanding() {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
     };
-  }, [createNoteAtClientPoint]);
+  }, []);
 
   const notebookBackground = useMemo(() => {
     const xOffset = ((offset.x % 320) + 320) % 320;
@@ -274,6 +428,17 @@ export function InfiniteNotebookLanding() {
     };
   }, [offset.x, offset.y]);
 
+  const completedNotes = useMemo(
+    () => notes.filter((note) => note.buildStatus === "ready" && note.latestRunId && hasNoteContent(note.text)),
+    [notes],
+  );
+
+  const onClearNotes = useCallback(() => {
+    clearAllBuildTimers();
+    setNotes([]);
+    setActiveNoteId(null);
+  }, [clearAllBuildTimers]);
+
   return (
     <div className="relative min-h-screen overflow-hidden">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_8%,rgba(255,244,214,0.74),transparent_38%),radial-gradient(circle_at_88%_5%,rgba(198,239,227,0.78),transparent_32%)]" />
@@ -282,7 +447,7 @@ export function InfiniteNotebookLanding() {
         <div className="pointer-events-auto flex items-start gap-2">
           <button
             type="button"
-            onClick={() => setNotes([])}
+            onClick={onClearNotes}
             className="inline-flex h-11 items-center justify-center rounded-full border border-[var(--line)] bg-[rgba(255,252,245,0.92)] px-5 text-sm font-semibold text-[var(--ink)] shadow-[0_16px_28px_-24px_rgba(0,0,0,0.45)] transition hover:bg-white"
           >
             Clear notes
@@ -341,13 +506,117 @@ export function InfiniteNotebookLanding() {
                 autoFocus={isFocused && note.text.length === 0}
                 className="h-44 w-full resize-none rounded-b-xl bg-transparent px-3 py-3 text-sm leading-relaxed text-[#2d3129] outline-none"
               />
+              <div
+                className="flex flex-wrap items-center gap-2 border-t border-black/10 px-3 py-2"
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                {hasNoteContent(note.text) && note.buildStatus === "idle" ? (
+                  <p className="rounded-full bg-black/5 px-3 py-1 text-[10px] font-semibold tracking-[0.1em] uppercase text-[#4d5561]">
+                    Auto-build starts after 4.5s idle
+                  </p>
+                ) : null}
+                {note.buildStatus === "queued" ? (
+                  <p className="rounded-full bg-[#e2e8f0] px-3 py-1 text-[10px] font-semibold tracking-[0.1em] uppercase text-[#334155]">
+                    Queued
+                  </p>
+                ) : null}
+                {note.buildStatus === "building" ? (
+                  <p className="rounded-full bg-[#ffedd5] px-3 py-1 text-[10px] font-semibold tracking-[0.1em] uppercase text-[#9a3412]">
+                    Building...
+                  </p>
+                ) : null}
+                {note.buildStatus === "failed" ? (
+                  <button
+                    type="button"
+                    onClick={() => retryBuild(note.id)}
+                    className="rounded-full bg-[#fee2e2] px-3 py-1 text-[10px] font-semibold tracking-[0.1em] uppercase text-[#be123c] transition hover:bg-[#fecaca]"
+                  >
+                    Retry build
+                  </button>
+                ) : null}
+                {note.buildStatus === "ready" && note.latestRunId ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="rounded-full bg-[#dcfce7] px-3 py-1 text-[10px] font-semibold tracking-[0.1em] uppercase text-[#166534]">
+                      Done
+                    </p>
+                    <Link
+                      href={`/w/${DEMO_WORKSPACE_ID}/runs/${note.latestRunId}`}
+                      className="rounded-full border border-black/15 bg-white/75 px-3 py-1 text-[10px] font-semibold tracking-[0.1em] uppercase text-[#1f2937] transition hover:bg-white"
+                    >
+                      Open build
+                    </Link>
+                    <Link
+                      href={`/w/${DEMO_WORKSPACE_ID}/runs/${note.latestRunId}/artifacts`}
+                      className="rounded-full border border-black/15 bg-white/75 px-3 py-1 text-[10px] font-semibold tracking-[0.1em] uppercase text-[#1f2937] transition hover:bg-white"
+                    >
+                      Watch demo
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => retryBuild(note.id)}
+                      className="rounded-full border border-black/15 bg-white/75 px-3 py-1 text-[10px] font-semibold tracking-[0.1em] uppercase text-[#1f2937] transition hover:bg-white"
+                    >
+                      Rebuild
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </article>
           );
         })}
       </div>
 
       <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full border border-[#d8d6cc] bg-[rgba(255,252,245,0.9)] px-4 py-2 text-xs font-semibold tracking-[0.14em] uppercase text-[var(--muted-ink)]">
-        Double-click empty paper to add note • Drag paper to pan
+        Double-click empty paper to add note • Type and pause to auto-build • Drag paper to pan
+      </div>
+
+      <div className="pointer-events-none absolute right-3 bottom-3 z-20 sm:right-6 sm:bottom-6">
+        <div className="pointer-events-auto flex max-w-xs flex-col items-end gap-2">
+          <button
+            type="button"
+            onClick={() => setIsCompletedTrayOpen((current) => !current)}
+            className="inline-flex h-10 items-center justify-center rounded-full border border-[var(--line)] bg-[rgba(255,252,245,0.95)] px-4 text-xs font-semibold tracking-[0.12em] uppercase text-[var(--ink)] shadow-[0_16px_28px_-24px_rgba(0,0,0,0.45)] transition hover:bg-white"
+          >
+            Completed ({completedNotes.length})
+          </button>
+          {isCompletedTrayOpen ? (
+            <div className="w-full min-w-[248px] rounded-2xl border border-[var(--line)] bg-[rgba(255,252,245,0.97)] p-3 shadow-[0_24px_40px_-28px_rgba(0,0,0,0.55)] backdrop-blur">
+              {completedNotes.length === 0 ? (
+                <p className="text-xs font-medium text-[var(--muted-ink)]">
+                  No completed builds yet.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {completedNotes.map((note) => {
+                    const ideaTitle = note.text.split("\n")[0]?.trim() || "Untitled idea";
+
+                    return (
+                      <article key={`${note.id}-${note.latestRunId}`} className="rounded-xl border border-black/8 bg-white/80 p-2">
+                        <p className="truncate text-xs font-semibold text-[var(--ink)]">{ideaTitle}</p>
+                        {note.latestRunId ? (
+                          <div className="mt-2 flex items-center gap-2">
+                            <Link
+                              href={`/w/${DEMO_WORKSPACE_ID}/runs/${note.latestRunId}`}
+                              className="rounded-full border border-black/15 bg-white px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] uppercase text-[var(--ink)] transition hover:bg-[#f8f6ef]"
+                            >
+                              Open
+                            </Link>
+                            <Link
+                              href={`/w/${DEMO_WORKSPACE_ID}/runs/${note.latestRunId}/artifacts`}
+                              className="rounded-full border border-black/15 bg-white px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] uppercase text-[var(--ink)] transition hover:bg-[#f8f6ef]"
+                            >
+                              Demo
+                            </Link>
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
